@@ -231,14 +231,18 @@ def caption_proposals(
 
             # transform integers into strings
             strings = [train_dataset.train_vocab.itos[i] for i in ints_stack[0].cpu().numpy()]
+            vectors = [train_dataset[i] for i in ints_stack[0].cpu().numpy()]
 
             # remove starting token
             strings = strings[1:]
+            vectors = vectors[1:]
+            
             # and remove everything after ending token
             # sometimes it is not in the list (when the caption is intended to be larger than cfg.max_len)
             try:
                 first_entry_of_eos = strings.index('</s>')
                 strings = strings[:first_entry_of_eos]
+                
             except ValueError:
                 pass
 
@@ -252,7 +256,7 @@ def caption_proposals(
                 'start': round(start.item(), 1),
                 'end': round(end.item(), 1),
                 'sentence': sentence,
-                'vectors': ints_stack[0].cpu().numpy()
+                'vectors': vectors
             })
 
     return results
