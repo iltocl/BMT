@@ -251,7 +251,8 @@ def caption_proposals(
             results.append({
                 'start': round(start.item(), 1),
                 'end': round(end.item(), 1),
-                'sentence': sentence
+                'sentence': sentence,
+                'vectors': ints_stack
             })
 
     return results
