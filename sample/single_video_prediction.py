@@ -252,7 +252,7 @@ def caption_proposals(
                 'start': round(start.item(), 1),
                 'end': round(end.item(), 1),
                 'sentence': sentence,
-                'vectors': ints_stack
+                'vectors': ints_stack[0].cpu().numpy()
             })
 
     return results
