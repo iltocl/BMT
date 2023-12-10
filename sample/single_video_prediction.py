@@ -6,6 +6,8 @@ import subprocess
 import numpy as np
 import torch
 
+import json
+
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from datasets.captioning_dataset import ActivityNetCaptionsDataset
 # from datasets.load_features import load_features_from_npy
@@ -214,6 +216,8 @@ def caption_proposals(
     '''
 
     results = []
+    caps_index = []
+    cap_words = []
 
     with torch.no_grad():
         for start, end, conf in proposals.squeeze():
@@ -231,11 +235,11 @@ def caption_proposals(
 
             # transform integers into strings
             strings = [train_dataset.train_vocab.itos[i] for i in ints_stack[0].cpu().numpy()]
-            vectors = [train_dataset[i] for i in ints_stack[0].cpu().numpy()]
+            #vectors = [train_dataset[i] for i in ints_stack[0].cpu().numpy()]
 
             # remove starting token
             strings = strings[1:]
-            vectors = vectors[1:]
+            #vectors = vectors[1:]
             
             # and remove everything after ending token
             # sometimes it is not in the list (when the caption is intended to be larger than cfg.max_len)
@@ -249,15 +253,37 @@ def caption_proposals(
             # join everything together
             sentence = ' '.join(strings)
             # Capitalize the sentence
-            sentence = sentence.capitalize()
+            #sentence = sentence.capitalize()
 
             # add results to the list
-            results.append({
-                'start': round(start.item(), 1),
-                'end': round(end.item(), 1),
-                'sentence': sentence,
-                'vectors': vectors
-            })
+            #results.append({
+                #'start': round(start.item(), 1),
+                #'end': round(end.item(), 1),
+                #'sentence': sentence,
+                #'word_indexes': ints_stack[0].cpu().numpy().tolist()
+            #})
+
+            tag_begin = int(ints_stack[0].cpu().numpy().tolist()[0])
+            tag_end = ints_stack[0].cpu().numpy().tolist()[-1]
+            
+            caps_index.append(ints_stack[0].cpu().numpy().tolist()[1:-1])
+            cap_words.append(strings)
+
+    print("tag_begin", tag_begin)
+    print("tag_end", tag_end, '\n')
+    
+    flattened_list_index = [item for sublist in caps_index for item in sublist]
+    flattened_list_index.insert(0, tag_begin)
+    flattened_list_index.append(tag_end)
+    flattened_list_words = [item for sublist in cap_words for item in sublist]
+    print(len(flattened_list_index))
+    print(flattened_list_index)
+    print(len(flattened_list_words))
+    print(flattened_list_words)
+    results.append({
+      'caps_index': flattened_list_index,
+      'cap_words': flattened_list_words
+    })
 
     return results
 
@@ -281,6 +307,21 @@ def get_video_duration(path):
     print('Video Duration:', video_duration)
     return video_duration
 
+#-----
+def load_existing_captions(filename: str) -> Dict[str, Dict[str, Union[float, str]]]:
+    try:
+        with open(filename, 'r') as file:
+            existing_captions = json.load(file)
+    except FileNotFoundError:
+        existing_captions = {}
+    return existing_captions
+
+def update_and_save_captions(filename: str, video_id: str, new_captions: Dict[str, Union[float, str]]):
+    existing_captions = load_existing_captions(filename)
+    existing_captions[video_id] = new_captions
+    with open(filename, 'w') as file:
+        json.dump(existing_captions, file)
+#-----
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='One video prediction')
     parser.add_argument('--prop_generator_model_path', required=True)
@@ -292,6 +333,8 @@ if __name__ == "__main__":
     parser.add_argument('--device_id', type=int, default=0)
     parser.add_argument('--max_prop_per_vid', type=int, default=5)
     parser.add_argument('--nms_tiou_thresh', type=float, help='removed if tiou > nms_tiou_thresh. In (0, 1)')
+    parser.add_argument('--video_id', type=str, required=True)
+    parser.add_argument('--captions_json_file', required=True)
     args = parser.parse_args()
 
     feature_paths = {
@@ -318,6 +361,10 @@ if __name__ == "__main__":
         cap_model, feature_paths, train_dataset, cap_cfg, args.device_id, proposals, args.duration_in_secs
     )
 
-    print(captions)
+    print(args.video_id)
+    print("captions", captions)
 
+    # ---------
+    # Return a json file with the captions 
+    update_and_save_captions(args.captions_json_file, args.video_id, captions)
     # TODO: save original num of features (0th dim.) and just remove padding from them and trim accordingly
